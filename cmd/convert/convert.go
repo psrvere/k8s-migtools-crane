@@ -41,6 +41,28 @@ func NewConvertOptions(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "convert",
 		Short: "Convert a deprecated resource to its replacement",
+		Long: `Convert OpenShift BuildConfig resources to Shipwright Build resources.
+
+Supported resource type: BuildConfigs
+
+Supported BuildConfig features:
+  Docker strategy:  dockerfile path, build args, env vars, pull secrets
+  Source strategy:   S2I builder image, env vars, pull secrets
+  Source types:      Git (with proxy config), Binary (single file), Image
+  Output:           ImageStreamTag (converted to internal registry URL), DockerImage
+  Registries:       search, insecure, and block registries via flags
+
+Fields migrated to Build:
+  strategy, source, output image, env vars, push secret, dockerfile param,
+  build args, volumes, labels, annotations, image labels, timeout
+
+Fields migrated to BuildRun template (generated when present):
+  nodeSelector, serviceAccount
+
+Fields warned about (no Shipwright equivalent):
+  triggers, runPolicy, history limits, postCommit hooks, mountTrustedCA,
+  noCache, forcePull, squash, incremental, custom scripts, From field,
+  resource requirements, build-time secrets, build-time configmaps`,
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := t.Complete(c, args); err != nil {
 				return err
@@ -65,8 +87,8 @@ func addFlagsForConvertOptions(t *ConvertOptions, cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&t.Namespace, "namespace", "n", "", "The namespace to convert resources from")
 	cmd.Flags().StringVarP(&t.ResourceType, "resource", "r", "", "The deprecated plural resource type to convert, e.g. BuildConfigs")
 	cmd.Flags().StringSliceVarP(&t.SearchRegistries, "search-registries", "s", []string{}, "List of search registries")
-	cmd.Flags().StringSliceVar(&t.InsecureRegistries, "insecure-registries", []string{}, "List of search registries")
-	cmd.Flags().StringSliceVar(&t.BlockRegistries, "block-registries", []string{}, "List of search registries")
+	cmd.Flags().StringSliceVar(&t.InsecureRegistries, "insecure-registries", []string{}, "List of insecure registries")
+	cmd.Flags().StringSliceVar(&t.BlockRegistries, "block-registries", []string{}, "List of blocked registries")
 	cmd.Flags().StringVarP(&t.exportDir, "export-dir", "e", "convert", "The path where files are to be exported")
 	cmd.Flags().BoolVar(&t.debug, "debug", false, "Enable debug logging")
 }
