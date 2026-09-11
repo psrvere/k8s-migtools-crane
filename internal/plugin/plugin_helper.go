@@ -9,7 +9,7 @@ import (
 	"github.com/konveyor/crane-lib/transform"
 	binary_plugin "github.com/konveyor/crane-lib/transform/binary-plugin"
 	"github.com/konveyor/crane-lib/transform/kubernetes"
-	"github.com/migtools/crane-plugin-buildconfig-to-shipwright/buildconfig"
+	"github.com/migtools/crane-plugin-buildconfig-to-builds/buildconfig"
 	"github.com/migtools/crane-plugin-openshift/openshift"
 	"github.com/sirupsen/logrus"
 )

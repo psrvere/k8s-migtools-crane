@@ -18,5 +18,5 @@ func TestGetDefaultPluginsExcludesOptInPlugins(t *testing.T) {
 
 	assert.Contains(t, names, "KubernetesPlugin")
 	assert.Contains(t, names, "OpenShiftPlugin")
-	assert.NotContains(t, names, "BuildConfigPlugin")
+	assert.NotContains(t, names, "BuildConfigToBuildsPlugin")
 }
