@@ -476,6 +476,7 @@ func TestReconcileInstructionStages_Overwrite(t *testing.T) {
 func TestRun_InstructionsFileAndPositionalArgsConflict(t *testing.T) {
 	o := &Options{
 		globalFlags:     &flags.GlobalFlags{},
+		log:             logrus.StandardLogger(),
 		RequestedStages: []string{"10_KubernetesPlugin"},
 		Flags: Flags{
 			InstructionsFile: "sample-transform-instructor-file.yaml",
@@ -551,11 +552,11 @@ func TestResolveAndValidateStages_CustomStageCreation(t *testing.T) {
 			expectError:    false,
 		},
 		{
-            name:           "invalid custom stage name returns wrapped error",
-            requestedStage: "invalid stage name!", 
-            shouldCreate:   false,
-            expectError:    true,
-        },
+			name:           "invalid custom stage name returns wrapped error",
+			requestedStage: "invalid stage name!",
+			shouldCreate:   false,
+			expectError:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -597,24 +598,24 @@ func TestResolveAndValidateStages_CustomStageCreation(t *testing.T) {
 			)
 
 			if tt.expectError {
-                if err == nil {
-                    t.Fatalf("expected error but got none")
-                }
-                if !strings.Contains(err.Error(), "invalid custom stage name") || strings.Contains(err.Error(), "<nil>") {
-                    t.Errorf("expected error to contain validation context, but got: %v", err)
-                }
+				if err == nil {
+					t.Fatalf("expected error but got none")
+				}
+				if !strings.Contains(err.Error(), "invalid custom stage name") || strings.Contains(err.Error(), "<nil>") {
+					t.Errorf("expected error to contain validation context, but got: %v", err)
+				}
 
-                stageDir := filepath.Join(subTransformDir, tt.requestedStage)
-                if _, statErr := os.Stat(stageDir); statErr == nil {
-                    t.Errorf("expected directory %s NOT to be created for invalid stage name", stageDir)
-                }
+				stageDir := filepath.Join(subTransformDir, tt.requestedStage)
+				if _, statErr := os.Stat(stageDir); statErr == nil {
+					t.Errorf("expected directory %s NOT to be created for invalid stage name", stageDir)
+				}
 
-                return
-            } else {
-                if err != nil {
-                    t.Fatalf("unexpected error: %v", err)
-                }
-            }
+				return
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
 
 			if len(resolved) != 1 {
 				t.Fatalf("expected 1 resolved stage, got %d", len(resolved))
@@ -680,6 +681,7 @@ func TestResolveAndValidateStages_MultipleCustomStages(t *testing.T) {
 	log.SetOutput(os.Stderr)
 
 	o := &Options{
+		log: logrus.StandardLogger(),
 		Flags: Flags{
 			SkipPlugins: []string{},
 		},
@@ -823,6 +825,7 @@ func TestResolveAndValidateStages_CustomStageWithPreviousStageOutput(t *testing.
 	log.SetOutput(os.Stderr)
 
 	o := &Options{
+		log: logrus.StandardLogger(),
 		Flags: Flags{
 			SkipPlugins: []string{},
 		},
@@ -1060,6 +1063,7 @@ func TestValidate_ExportDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			o := &Options{
+				log: logrus.StandardLogger(),
 				Flags: Flags{
 					ExportDir:    tt.exportDir,
 					PluginDir:    filepath.Join(tmpDir, "plugins"),
@@ -1090,11 +1094,11 @@ func TestValidate_ExportDir(t *testing.T) {
 
 func TestParseStageOptionals(t *testing.T) {
 	tests := []struct {
-		name      string
-		values    []string
-		wantErr   bool
-		errMsg    string
-		expected  map[string]map[string]string
+		name     string
+		values   []string
+		wantErr  bool
+		errMsg   string
+		expected map[string]map[string]string
 	}{
 		{
 			name:   "single stage",
@@ -1233,6 +1237,7 @@ func TestParseStageOptionals_MultiFieldJSON(t *testing.T) {
 func TestRun_InstructionsFileAndStageOptionalsConflict(t *testing.T) {
 	o := &Options{
 		globalFlags: &flags.GlobalFlags{},
+		log:         logrus.StandardLogger(),
 		Flags: Flags{
 			InstructionsFile: "instructions.yaml",
 			StageOptionals:   []string{`KubernetesPlugin={"key": "val"}`},
@@ -1248,11 +1253,69 @@ func TestRun_InstructionsFileAndStageOptionalsConflict(t *testing.T) {
 	}
 }
 
+func TestStageOptionalsForPlugin(t *testing.T) {
+	optionals := map[string]map[string]string{
+		"KubernetesPlugin": {"strip-default-rbac": "true"},
+		"OpenShiftPlugin":  {"strip-default-cabundle": "true"},
+	}
+
+	tests := []struct {
+		name     string
+		plugin   string
+		expected map[string]map[string]string
+	}{
+		{
+			name:   "returns only KubernetesPlugin optionals",
+			plugin: "KubernetesPlugin",
+			expected: map[string]map[string]string{
+				"KubernetesPlugin": {"strip-default-rbac": "true"},
+			},
+		},
+		{
+			name:   "returns only OpenShiftPlugin optionals",
+			plugin: "OpenShiftPlugin",
+			expected: map[string]map[string]string{
+				"OpenShiftPlugin": {"strip-default-cabundle": "true"},
+			},
+		},
+		{
+			name:     "returns nil for stage without optionals",
+			plugin:   "CustomEdits",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stageOptionalsForPlugin(optionals, tt.plugin)
+			if len(got) != len(tt.expected) {
+				t.Fatalf("expected %d stage optionals, got %d: %v", len(tt.expected), len(got), got)
+			}
+			for stage, expectedFlags := range tt.expected {
+				gotFlags, ok := got[stage]
+				if !ok {
+					t.Errorf("missing optionals for stage %q", stage)
+					continue
+				}
+				if len(gotFlags) != len(expectedFlags) {
+					t.Errorf("stage %q: expected %d flags, got %d", stage, len(expectedFlags), len(gotFlags))
+				}
+				for key, expectedValue := range expectedFlags {
+					if gotFlags[key] != expectedValue {
+						t.Errorf("stage %q flag %q: expected %q, got %q", stage, key, expectedValue, gotFlags[key])
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestValidate_MissingExportDir_FailsBeforeRun(t *testing.T) {
 	tmpDir := t.TempDir()
 	transformDir := filepath.Join(tmpDir, "transform")
 
 	o := &Options{
+		log: logrus.StandardLogger(),
 		Flags: Flags{
 			ExportDir:    filepath.Join(tmpDir, "missing-export"),
 			TransformDir: transformDir,

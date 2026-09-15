@@ -10,6 +10,7 @@ import (
 	"github.com/konveyor/crane/internal/flags"
 	"github.com/konveyor/crane/internal/plugin"
 	"github.com/olekukonko/tablewriter"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -20,6 +21,7 @@ type Options struct {
 	// 2. globalFlags for the args merged with values from the viper config file
 	cobraGlobalFlags *flags.GlobalFlags
 	globalFlags      *flags.GlobalFlags
+	log              *logrus.Logger
 	// Two Flags struct fields are needed
 	// 1. cobraFlags for explicit CLI args parsed by cobra
 	// 2. Flags for the args merged with values from the viper config file
@@ -45,6 +47,8 @@ type AvailablePlugins struct {
 
 func (o *Options) Complete(c *cobra.Command, args []string) error {
 	// TODO: @jgabani
+	o.globalFlags.SetCmdName("plugin-manager list")
+	o.log = o.globalFlags.GetLoggerOrDefault()
 	return nil
 }
 
@@ -96,15 +100,19 @@ func addFlagsForOptions(o *Flags, cmd *cobra.Command) {
 }
 
 func (o *Options) run() error {
-	log := o.globalFlags.GetLogger()
+	log := o.log
+
+	log.Infof("Starting plugin-manager list...")
+
 	if o.Installed {
 		// retrieve list of all the plugins that are installed within plugin dir
 		// TODO: differentiate between multiple repos
 		plugins, err := plugin.GetFilteredPlugins(o.PluginDir, []string{}, log)
 		if err != nil {
+			log.Errorf("Failed to get installed plugins from %s: %v", o.PluginDir, err)
 			return err
 		}
-		fmt.Println(fmt.Sprintf("Listing plugins from path - %s, along with default plugin", o.PluginDir))
+		fmt.Printf("Listing plugins from path - %s, along with default plugin\n", o.PluginDir)
 		printInstalledInformation(plugins)
 		return nil
 	}
@@ -113,6 +121,7 @@ func (o *Options) run() error {
 	if o.Name != "" && (o.Params || o.Versions) {
 		manifestMap, err := plugin.BuildManifestMap(log, o.Name, o.Repo)
 		if err != nil {
+			log.Errorf("Failed to build manifest for plugin %s: %v", o.Name, err)
 			return nil
 		}
 		if len(manifestMap) == 0 {
@@ -141,11 +150,12 @@ func (o *Options) run() error {
 	} else {
 		manifestMap, err := plugin.BuildManifestMap(log, "", o.Repo)
 		if err != nil {
+			log.Errorf("Failed to build manifest: %v", err)
 			return nil
 		}
 
 		if o.Name != "" {
-			log.Info(fmt.Sprintf("\"--name\" flag should be used with either \"--versions\" or \"--params\" flag to get more information about the plugin, example: \"crane plugin-manager --name %s --versions\" or \"crane plugin-manager --name %s --params\"\n", o.Name, o.Name))
+			log.Infof("\"--name\" flag should be used with either \"--versions\" or \"--params\" flag to get more information about the plugin, example: \"crane plugin-manager --name %s --versions\" or \"crane plugin-manager --name %s --params\"", o.Name, o.Name)
 		} else if o.Params {
 			// retrieve all the information for all the versions available for a specific plugin
 			for repo, pluginsMap := range manifestMap {
@@ -163,7 +173,7 @@ func (o *Options) run() error {
 	return nil
 }
 
-//TODO: this can be merged with printParamsInformation
+// TODO: this can be merged with printParamsInformation
 func printInstalledInformation(plugins []transform2.Plugin) {
 	for _, thisPlugin := range plugins {
 		printTable([][]string{
